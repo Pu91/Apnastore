@@ -297,7 +297,7 @@ async function loadRelated(category, currentId){
     if(id === currentId) return;
 
     html+=`
-      <a href="/apna store app/productviews.html?id=${id}" class="border p-2 rounded shadow">
+      <a href="productviews.html?id=${id}" class="border p-2 rounded shadow">
         <img src="${p.images?.[0] || ""}" class="h-32 w-full object-contain">
         <p>${p.name}</p>
         <p class="text-green-600">₹${p.price}</p>
