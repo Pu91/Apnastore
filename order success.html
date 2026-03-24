@@ -43,7 +43,7 @@ button{
     <p><span class="label">Payment Status:</span> <span id="payment-status"></span></p>
   </div>
 
-  <button onclick="window.location.href='/apna store app/index.html'">Back to Home</button>
+  <button onclick="window.location.href='index.html'">Back to Home</button>
 </div>
 
 <script type="module">
@@ -80,7 +80,7 @@ onAuthStateChanged(auth, async (user)=>{
 
     if(querySnap.empty){
       alert("No order found!");
-      window.location.href="/apna store app/index.html";
+      window.location.href="index.html";
       return;
     }
 
