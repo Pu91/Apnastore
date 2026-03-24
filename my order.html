@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Orders</title>
+<style>
+body{font-family:system-ui;background:#f1f3f6;margin:0;}
+.header{background:#2874f0;color:white;padding:15px;font-size:18px;font-weight:bold;}
+.container{max-width:900px;margin:auto;padding:15px;}
+.card{background:white;padding:15px;border-radius:12px;margin-bottom:15px;box-shadow:0 4px 10px rgba(0,0,0,0.08);transition:0.3s;}
+.card:hover{transform:translateY(-3px);}
+.row{display:flex;justify-content:space-between;flex-wrap:wrap;}
+.badge{padding:5px 10px;border-radius:20px;font-size:12px;color:white;}
+.pending{background:orange;}
+.shipped{background:#2874f0;}
+.delivered{background:green;}
+.cancelled{background:red;}
+button{padding:8px 12px;border:none;border-radius:6px;cursor:pointer;margin-top:8px;}
+.viewBtn{background:#2874f0;color:white;}
+.cancelBtn{background:red;color:white;margin-left:10px;}
+.editBtn{background:#fb641b;color:white;margin-left:10px;}
+.disabledBtn{background:gray;color:white;cursor:not-allowed;}
+.empty{text-align:center;margin-top:40px;color:gray;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;}
+.modal-content{background:white;padding:20px;border-radius:10px;width:95%;max-width:500px;}
+input{width:100%;padding:8px;margin:5px 0;border-radius:6px;border:1px solid #ccc;}
+.saveBtn{background:#2874f0;color:white;width:100%;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="header">My Orders</div>
+<div class="container">
+  <div id="orders"></div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal" id="editModal">
+  <div class="modal-content">
+    <h3>Edit Address (Only Once)</h3>
+    <input type="text" id="edit_name" placeholder="Full Name">
+    <input type="text" id="edit_phone" placeholder="Phone">
+    <input type="email" id="edit_email" placeholder="Email">
+    <input type="text" id="edit_address" placeholder="Address">
+    <input type="text" id="edit_city" placeholder="City">
+    <input type="text" id="edit_state" placeholder="State">
+    <input type="text" id="edit_pin" placeholder="PIN Code">
+    <button class="saveBtn" id="saveBtn">Save Changes</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, collection, getDocs, query, where, orderBy, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const ordersDiv = document.getElementById("orders");
+const modal = document.getElementById("editModal");
+let currentOrderId = null;
+
+// Load Orders
+async function loadOrders(userId){
+  try {
+    const q = query(
+      collection(db,"orders"),
+      where("user_id","==",userId),
+      orderBy("createdAt","desc")
+    );
+    const snapshot = await getDocs(q);
+
+    if(snapshot.empty){
+      ordersDiv.innerHTML = "<p class='empty'>No orders found 📦</p>";
+      return;
+    }
+
+    ordersDiv.innerHTML = "";
+    snapshot.forEach(docSnap=>{
+      const order = docSnap.data();
+      const createdDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds*1000).toLocaleString() : "Unknown Date";
+
+      let badgeClass = "pending";
+      if(order.status==="Shipped") badgeClass="shipped";
+      if(order.status==="Delivered") badgeClass="delivered";
+      if(order.status==="Cancelled") badgeClass="cancelled";
+
+      const discount = order.discount_amount || 0;
+      const subtotal = order.total_amount || 0;
+      const finalTotal = order.final_total || (subtotal - discount);
+
+      let editButton = "";
+      if(order.status==="Pending" && !order.address_updated){
+        editButton = `<button class="editBtn" onclick="editOrder('${docSnap.id}')">Edit Address</button>`;
+      } else if(order.address_updated){
+        editButton = `<button class="disabledBtn" disabled>Already Updated</button>`;
+      }
+
+      ordersDiv.innerHTML += `
+        <div class="card">
+          <div class="row">
+            <div>
+              <b>Order #${docSnap.id}</b><br>
+              <small>${createdDate}</small>
+            </div>
+            <div class="badge ${badgeClass}">${order.status}</div>
+          </div>
+          <hr>
+          <p><b>Subtotal:</b> ₹${subtotal}</p>
+          <p><b>Discount:</b> ₹${discount}</p>
+          <h3>Total: ₹${finalTotal}</h3>
+          <button class="viewBtn" onclick="viewOrder('${docSnap.id}')">View Details</button>
+          ${order.status==="Pending" ? `<button class="cancelBtn" onclick="cancelOrder('${docSnap.id}')">Cancel Order</button>` : ""}
+          ${editButton}
+        </div>
+      `;
+    });
+  } catch(err){
+    console.error("Error loading orders:", err);
+    ordersDiv.innerHTML = `<p class='empty'>Error loading orders ❌<br>${err.message}</p>`;
+  }
+}
+
+// Listen Auth State
+onAuthStateChanged(auth, user=>{
+  if(!user){
+    ordersDiv.innerHTML="<p class='empty'>Please login first ❌</p>";
+  } else {
+    loadOrders(user.uid);
+  }
+});
+
+// EDIT ORDER
+window.editOrder = async function(id){
+  currentOrderId = id;
+  modal.style.display="flex";
+  const docRef = doc(db,"orders",id);
+  const docSnap = await getDoc(docRef);
+  const data = docSnap.data();
+  if(!data) return;
+
+  document.getElementById("edit_name").value = data.customer_name || "";
+  document.getElementById("edit_phone").value = data.customer_phone || "";
+  document.getElementById("edit_email").value = data.email || "";
+  document.getElementById("edit_address").value = data.address || "";
+  document.getElementById("edit_city").value = data.city || "";
+  document.getElementById("edit_state").value = data.state || "";
+  document.getElementById("edit_pin").value = data.pin_code || "";
+}
+
+// SAVE CHANGES
+document.getElementById("saveBtn").addEventListener("click", async ()=>{
+  const docRef = doc(db,"orders",currentOrderId);
+  const docSnap = await getDoc(docRef);
+  const data = docSnap.data();
+
+  if(data.status !== "Pending"){ alert("Order already confirmed ❌"); return; }
+  if(data.address_updated){ alert("Address already changed once ❌"); return; }
+
+  await updateDoc(docRef,{
+    customer_name: document.getElementById("edit_name").value,
+    customer_phone: document.getElementById("edit_phone").value,
+    email: document.getElementById("edit_email").value,
+    address: document.getElementById("edit_address").value,
+    city: document.getElementById("edit_city").value,
+    state: document.getElementById("edit_state").value,
+    pin_code: document.getElementById("edit_pin").value,
+    address_updated: true
+  });
+
+  alert("Address Updated Successfully ✅");
+  modal.style.display="none";
+  const user = auth.currentUser;
+  if(user) loadOrders(user.uid);
+});
+
+// CLOSE MODAL
+modal.addEventListener("click",(e)=>{ if(e.target===modal) modal.style.display="none"; });
+
+// CANCEL ORDER
+window.cancelOrder = async function(id){
+  if(!confirm("Are you sure to cancel this order?")) return;
+  const docRef = doc(db,"orders",id);
+  await updateDoc(docRef,{status:"Cancelled"});
+  const user = auth.currentUser;
+  if(user) loadOrders(user.uid);
+}
+
+// VIEW ORDER
+window.viewOrder = function(id){
+  window.location.href="/apna store app/order items.html?id="+id;
+}
+</script>
+</body>
+</html>
