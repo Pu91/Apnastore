@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register - MyShop</title>
+
+<style>
+body{
+margin:0;
+font-family:system-ui;
+background:#2874f0;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+
+.box{
+background:white;
+padding:25px;
+border-radius:12px;
+width:320px;
+text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,0.2);
+}
+
+input{
+width:100%;
+padding:10px;
+margin:8px 0;
+border-radius:6px;
+border:1px solid #ddd;
+}
+
+.pass-box{
+position:relative;
+}
+
+.eye{
+position:absolute;
+right:10px;
+top:50%;
+transform:translateY(-50%);
+cursor:pointer;
+font-size:14px;
+}
+
+button{
+width:100%;
+padding:10px;
+background:#fb641b;
+color:white;
+border:none;
+border-radius:6px;
+cursor:pointer;
+margin-top:10px;
+}
+
+button:disabled{
+background:gray;
+}
+
+.link{
+margin-top:10px;
+font-size:13px;
+}
+
+.link a{
+text-decoration:none;
+color:#2874f0;
+}
+
+#msg{
+margin-top:10px;
+color:red;
+font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+<h2>Create Account</h2>
+
+<input type="text" id="name" placeholder="Full Name">
+<input type="email" id="email" placeholder="Enter Email">
+
+<div class="pass-box">
+<input type="password" id="password" placeholder="Enter Password">
+<span class="eye" onclick="toggle('password')">👁️</span>
+</div>
+
+<div class="pass-box">
+<input type="password" id="confirmPassword" placeholder="Confirm Password">
+<span class="eye" onclick="toggle('confirmPassword')">👁️</span>
+</div>
+
+<button id="btn" onclick="register()">Register</button>
+
+<div class="link">
+Already have account? <a href="login.html">Login</a>
+</div>
+
+<p id="msg"></p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* 🔥 CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* 👁️ PASSWORD TOGGLE */
+window.toggle = (id)=>{
+  const input = document.getElementById(id);
+  input.type = input.type === "password" ? "text" : "password";
+};
+
+/* REGISTER */
+window.register = async () => {
+
+const name = document.getElementById("name").value.trim();
+const email = document.getElementById("email").value.trim();
+const password = document.getElementById("password").value;
+const confirmPassword = document.getElementById("confirmPassword").value;
+const msg = document.getElementById("msg");
+const btn = document.getElementById("btn");
+
+msg.innerText = "";
+
+/* VALIDATION */
+if(!name || !email || !password){
+msg.innerText = "All fields required";
+return;
+}
+
+if(password.length < 6){
+msg.innerText = "Password must be at least 6 characters";
+return;
+}
+
+if(password !== confirmPassword){
+msg.innerText = "Passwords do not match";
+return;
+}
+
+/* LOADING */
+btn.disabled = true;
+btn.innerText = "Registering...";
+
+try{
+
+const userCred = await createUserWithEmailAndPassword(auth, email, password);
+const user = userCred.user;
+
+/* 🔥 SAVE USER DATA */
+await setDoc(doc(db,"users",user.uid),{
+  name: name,
+  email: email,
+  uid: user.uid,
+  createdAt: serverTimestamp()
+});
+
+alert("Registration Successful 🎉");
+
+/* REDIRECT */
+window.location.href = "index.html";
+
+}catch(error){
+msg.innerText = error.message;
+}
+
+/* RESET BUTTON */
+btn.disabled = false;
+btn.innerText = "Register";
+
+};
+</script>
+
+</body>
+</html>
