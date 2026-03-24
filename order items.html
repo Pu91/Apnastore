@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Details</title>
+
+<style>
+body{font-family:system-ui;background:#f1f3f6;margin:0;}
+.header{background:#2874f0;color:white;padding:12px;text-align:center;font-size:18px;font-weight:bold;}
+.container{max-width:900px;margin:auto;padding:15px;}
+.card{background:white;padding:15px;border-radius:12px;margin-bottom:15px;box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+.product{display:flex;gap:15px;padding:10px 0;border-bottom:1px solid #eee;}
+.product:last-child{border-bottom:none;}
+.product img{width:80px;height:80px;object-fit:cover;border-radius:8px;}
+.status{padding:6px 12px;border-radius:20px;font-size:13px;display:inline-block;margin-top:5px;}
+.pending{background:#fff3cd;color:#856404;}
+.shipped{background:#d1ecf1;color:#0c5460;}
+.out{background:#ffeeba;color:#856404;}
+.delivered{background:#d4edda;color:#155724;}
+.cancelled{background:#f8d7da;color:#721c24;}
+.summaryRow{display:flex;justify-content:space-between;margin:6px 0;}
+.total{font-size:18px;font-weight:bold;}
+.btn{padding:10px;border:none;border-radius:6px;width:100%;margin-top:10px;font-weight:bold;cursor:pointer;}
+.trackBtn{background:#2874f0;color:white;}
+.printBtn{background:#28a745;color:white;}
+.cancelBtn{background:#dc3545;color:white;}
+</style>
+</head>
+
+<body>
+
+<div class="header">Order Details</div>
+
+<div class="container">
+  <div id="orderDetails">Loading order...</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const params = new URLSearchParams(window.location.search);
+const orderId = params.get("id");
+const container = document.getElementById("orderDetails");
+
+if(!orderId){
+  container.innerHTML = "<p style='color:red;'>Invalid order ID ❌</p>";
+  throw new Error("Invalid ID");
+}
+
+onAuthStateChanged(auth, (user)=>{
+  if(!user){
+    container.innerHTML="<p>Please login ❌</p>";
+  } else {
+    loadOrder(user.uid);
+  }
+});
+
+async function loadOrder(userId){
+  try{
+    const orderRef = doc(db,"orders",orderId);
+    const orderSnap = await getDoc(orderRef);
+
+    if(!orderSnap.exists()){
+      container.innerHTML="<p style='color:red;'>Order not found ❌</p>";
+      return;
+    }
+
+    const order = orderSnap.data();
+
+    if(order.user_id !== userId){
+      container.innerHTML="<p style='color:red;'>Unauthorized ❌</p>";
+      return;
+    }
+
+    const itemsQuery = query(
+      collection(db,"order_items"),
+      where("order_id","==",orderId)
+    );
+
+    const itemsSnap = await getDocs(itemsQuery);
+
+    let productHTML = "";
+    let subtotal = 0;
+
+    itemsSnap.forEach(docSnap=>{
+      const item = docSnap.data();
+      const itemTotal = item.price * item.quantity;
+      subtotal += itemTotal;
+
+      productHTML += `
+        <div class="product">
+          <img src="${item.image || 'https://via.placeholder.com/80'}"/>
+          <div>
+            <p><b>${item.product_name}</b></p>
+            <p>₹${item.price} × ${item.quantity} = ₹${itemTotal}</p>
+          </div>
+        </div>
+      `;
+    });
+
+    const discount = order.discount_amount || 0;
+    const finalTotal = order.final_total || (subtotal - discount);
+
+    let statusClass="pending";
+    if(order.status==="Shipped") statusClass="shipped";
+    if(order.status==="Out for Delivery") statusClass="out";
+    if(order.status==="Delivered") statusClass="delivered";
+    if(order.status==="Cancelled") statusClass="cancelled";
+
+    const date = order.createdAt?.seconds 
+      ? new Date(order.createdAt.seconds*1000).toLocaleString() 
+      : "Unknown";
+
+    container.innerHTML = `
+      <div class="card">
+        <h3>Order ID: ${orderId}</h3>
+        <p>Order Date: ${date}</p>
+        <div class="status ${statusClass}">${order.status}</div>
+      </div>
+
+      <div class="card">
+        <h3>Products</h3>
+        ${productHTML || "<p>No items found</p>"}
+      </div>
+
+      <div class="card">
+        <h3>Bill Summary</h3>
+        <div class="summaryRow">
+          <span>Subtotal</span>
+          <span>₹${subtotal}</span>
+        </div>
+
+        <div class="summaryRow">
+          <span>Discount</span>
+          <span style="color:green;">- ₹${discount}</span>
+        </div>
+
+        <hr>
+
+        <div class="summaryRow total">
+          <span>Total Payable</span>
+          <span>₹${finalTotal}</span>
+        </div>
+
+        <p><b>Payment Method:</b> ${order.payment_method}</p>
+        <p><b>Payment Status:</b> ${order.payment_status}</p>
+      </div>
+
+      <div class="card">
+        <h3>Delivery Address</h3>
+        <p><b>${order.customer_name}</b></p>
+        <p>${order.customer_phone}</p>
+        <p>${order.email}</p>
+        <p>${order.address}, ${order.city}</p>
+        <p>${order.state} - ${order.pin_code}</p>
+      </div>
+
+      <!-- ✅ TRACK BUTTON -->
+      <button class="btn trackBtn" onclick="trackOrder('${orderId}')">
+        Track Delivery
+      </button>
+
+      <button class="btn printBtn" onclick="window.print()">Print Invoice</button>
+
+      ${order.status==="Pending" ? `
+      <button class="btn cancelBtn" onclick="cancelOrder('${orderId}')">
+        Cancel Order
+      </button>` : ""}
+    `;
+  } catch(err){
+    container.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+  }
+}
+
+/* TRACK FUNCTION */
+window.trackOrder = function(orderId){
+  window.location.href = "/apna store app/track.html?id=" + orderId;
+}
+
+/* CANCEL ORDER */
+window.cancelOrder = async function(id){
+  if(confirm("Cancel order?")){
+    await updateDoc(doc(db,"orders",id),{status:"Cancelled"});
+    alert("Order Cancelled ❌");
+    location.reload();
+  }
+}
+</script>
+
+</body>
+</html>
