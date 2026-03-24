@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyShop Cart</title>
+<style>
+body{font-family:system-ui;background:#f1f3f6;margin:0}
+.container{max-width:600px;margin:auto;padding:15px}
+.card{background:white;padding:12px;margin-bottom:10px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
+img{width:70px;height:70px;object-fit:cover;border-radius:6px;}
+button{padding:6px 10px;background:#fb641b;color:white;border:none;border-radius:5px;margin-top:5px;cursor:pointer;}
+.remove{background:red}
+.qtybtn{padding:3px 8px}
+.summary{background:white;padding:10px;border-radius:8px;margin-top:10px}
+.checkoutbtn{width:100%;padding:12px;font-size:16px;margin-top:8px}
+input{width:100%;padding:8px;margin:5px 0;border-radius:5px;border:1px solid #ccc}
+#coupon_msg{font-weight:bold;margin-top:5px;color:green;}
+#coupon_msg.error{color:red;}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h2>Your Cart</h2>
+<div id="cart-items"></div>
+
+<div class="summary">
+<p id="subtotal"></p>
+<p id="discount"></p>
+<h3 id="total"></h3>
+</div>
+
+<h3>Apply Coupon</h3>
+<input type="text" id="coupon_input" placeholder="Enter Coupon Code">
+<button id="applyBtn">Apply Coupon</button>
+<p id="coupon_msg"></p>
+
+<button class="checkoutbtn" id="checkoutBtn">Proceed To Checkout</button>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+let currentUser = null;
+let cart = [];
+let discountAmount = 0;
+
+/* ELEMENTS */
+const container = document.getElementById("cart-items");
+const subtotalEl = document.getElementById("subtotal");
+const discountEl = document.getElementById("discount");
+const totalEl = document.getElementById("total");
+const couponMsg = document.getElementById("coupon_msg");
+
+/* AUTH CHECK */
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){
+    alert("Please login first!");
+    window.location.href="/login.html";
+  } else {
+    currentUser = user;
+    await loadCartFromFirestore();
+  }
+});
+
+/* LOAD CART FROM FIRESTORE */
+async function loadCartFromFirestore(){
+  const cartRef = doc(db,"carts",currentUser.uid);
+  const cartSnap = await getDoc(cartRef);
+  if(cartSnap.exists()){
+    const data = cartSnap.data();
+    cart = data.items || [];
+    discountAmount = data.discountAmount || 0;
+  } else {
+    cart = [];
+    discountAmount = 0;
+    await setDoc(cartRef,{ items:[], discountAmount:0 });
+  }
+  renderCart();
+}
+
+/* SAVE CART TO FIRESTORE */
+async function saveCartToFirestore(){
+  if(!currentUser) return;
+  const cartRef = doc(db,"carts",currentUser.uid);
+  await setDoc(cartRef,{
+    items: cart,
+    discountAmount
+  });
+}
+
+/* RENDER CART */
+function renderCart(){
+  container.innerHTML="";
+  let subtotal = 0;
+
+  if(cart.length===0){
+    container.innerHTML="<p>Your cart is empty</p>";
+    subtotalEl.innerText="";
+    discountEl.innerText="";
+    totalEl.innerText="";
+    return;
+  }
+
+  cart.forEach((item,index)=>{
+    subtotal += item.price * item.quantity;
+    const div = document.createElement("div");
+    div.className="card";
+    div.innerHTML=`
+      <img src="${item.image}">
+      <p><b>${item.name}</b></p>
+      <p>₹${item.price}</p>
+      Quantity:
+      <button class="qtybtn" onclick="changeQty(${index},-1)">-</button>
+      ${item.quantity}
+      <button class="qtybtn" onclick="changeQty(${index},1)">+</button>
+      <br>
+      <button class="remove" onclick="removeItem(${index})">Remove</button>
+    `;
+    container.appendChild(div);
+  });
+
+  subtotalEl.innerText="Subtotal: ₹"+subtotal;
+  discountEl.innerText="Discount: ₹"+discountAmount;
+  totalEl.innerText="Total: ₹"+(subtotal-discountAmount);
+}
+
+/* CHANGE QTY */
+window.changeQty=async (index,change)=>{
+  cart[index].quantity += change;
+  if(cart[index].quantity<=0) cart.splice(index,1);
+  discountResetIfNeeded();
+  await saveCartToFirestore();
+  renderCart();
+};
+
+/* REMOVE ITEM */
+window.removeItem=async (index)=>{
+  cart.splice(index,1);
+  discountResetIfNeeded();
+  await saveCartToFirestore();
+  renderCart();
+};
+
+/* RESET COUPON IF SUBTOTAL BELOW MIN ORDER */
+function discountResetIfNeeded(){
+  let subtotal = cart.reduce((sum,item)=>sum+item.price*item.quantity,0);
+  if(discountAmount>subtotal){
+    discountAmount=0;
+    couponMsg.innerText="";
+    couponMsg.className="";
+    if(currentUser){
+      const cartRef = doc(db,"carts",currentUser.uid);
+      updateDoc(cartRef,{ discountAmount:0 });
+    }
+  }
+}
+
+/* APPLY COUPON */
+document.getElementById("applyBtn").addEventListener("click", async ()=>{
+  const code = document.getElementById("coupon_input").value.trim().toUpperCase();
+  if(!code){ couponMsg.innerText="Enter coupon code"; couponMsg.className="error"; return; }
+  if(cart.length===0){ couponMsg.innerText="Cart is empty"; couponMsg.className="error"; return; }
+
+  let subtotal = cart.reduce((sum,item)=>sum+item.price*item.quantity,0);
+
+  try{
+    const couponRef = doc(db,"coupons",code);
+    const snap = await getDoc(couponRef);
+
+    if(!snap.exists()){ couponMsg.innerText="Invalid Coupon ❌"; couponMsg.className="error"; return; }
+
+    const data = snap.data();
+    if(!data.active){ couponMsg.innerText="Inactive ❌"; couponMsg.className="error"; return; }
+    if(data.expiry_date && new Date(data.expiry_date) < new Date()){ couponMsg.innerText="Expired ❌"; couponMsg.className="error"; return; }
+    if(subtotal < (data.min_order || 0)){ couponMsg.innerText="Minimum order ₹"+data.min_order; couponMsg.className="error"; return; }
+
+    if(data.discount_type==="percent"){
+      discountAmount = subtotal*data.discount_value/100;
+    } else {
+      discountAmount = data.discount_value;
+    }
+    if(discountAmount>subtotal) discountAmount=subtotal;
+
+    couponMsg.innerText="Coupon Applied ✅";
+    couponMsg.className="";
+    const cartRef = doc(db,"carts",currentUser.uid);
+    await updateDoc(cartRef,{ discountAmount });
+    renderCart();
+  } catch(err){ console.log(err); couponMsg.innerText="Error applying coupon"; couponMsg.className="error"; }
+});
+
+/* CHECKOUT */
+document.getElementById("checkoutBtn").addEventListener("click",()=>{
+  if(cart.length===0){ alert("Cart is empty"); return; }
+  window.location.href="/apna store app/chakout.html";
+});
+</script>
+</body>
+</html>
