@@ -431,7 +431,7 @@ async function loadProducts(){
         else stockText=`Stock: ${p.quantity}`;
 
         row.innerHTML += `
-        <div class="card" onclick="window.location.href='/apna store app/productviews.html?id=${p.id}'">
+        <div class="card" onclick="window.location.href='productviews.html?id=${p.id}'">
           <img src="${img}">
           <h3>${p.name}</h3>
           <p class="price">₹${p.price}</p>
