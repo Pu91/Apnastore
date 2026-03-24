@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Details</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 font-sans">
+
+<header class="bg-blue-600 text-white p-4 shadow-md">
+  <div class="max-w-6xl mx-auto flex justify-between items-center">
+    <a href="index.html" class="text-xl font-bold">MyShop</a>
+    <nav>
+      <a href="index.html" class="mr-4">Home</a>
+      <a href="cart.html">Cart 🛒</a>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto mt-8 p-4 bg-white rounded-xl shadow">
+
+  <div class="grid md:grid-cols-2 gap-8" id="product-container">
+    Loading...
+  </div>
+
+  <div class="mt-12">
+    <h3 class="text-xl font-bold mb-4">Ratings & Reviews ⭐</h3>
+    <div id="reviews" class="space-y-3"></div>
+  </div>
+
+  <div class="mt-12">
+    <h3 class="text-xl font-bold mb-4">Related Products</h3>
+    <div id="related-products" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+  </div>
+
+</main>
+
+<footer class="bg-gray-800 text-gray-300 mt-12 p-6 text-center text-sm">
+  &copy; 2026 MyShop
+</footer>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc,
+  collection, addDoc, getDocs,
+  query, where, orderBy, limit,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+import { getAuth, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+/* USER */
+function getUser(){
+  return new Promise((resolve)=>{
+    const unsub = onAuthStateChanged(auth,(user)=>{
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
+/* GET PRODUCT */
+const productId = new URLSearchParams(window.location.search).get("id");
+const container = document.getElementById("product-container");
+
+if(productId){
+  loadProduct(productId);
+}
+
+/* LOAD PRODUCT */
+async function loadProduct(id){
+  const snap = await getDoc(doc(db,"products",id));
+
+  if(!snap.exists()){
+    container.innerHTML="Product not found ❌";
+    return;
+  }
+
+  const data = snap.data();
+  const images = data.images?.length ? data.images : ["https://via.placeholder.com/400"];
+
+  container.innerHTML = `
+    <div>
+      <img id="mainImage" src="${images[0]}" class="w-full h-96 object-contain border mb-4">
+      <div class="flex gap-2 flex-wrap">
+        ${images.map(img=>`
+          <img src="${img}" onclick="changeImage('${img}')"
+          class="w-20 h-20 object-cover border cursor-pointer">
+        `).join("")}
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-2xl font-bold mb-2">${data.name}</h2>
+      <div id="ratingBox" class="mb-2 text-yellow-500">Loading rating...</div>
+      <div class="text-green-600 text-xl font-semibold mb-2">₹${data.price}</div>
+      <p class="mb-4">${data.description || "No description"}</p>
+
+      <div class="flex gap-3">
+        <button onclick="addToCart('${id}')"
+        class="bg-orange-500 text-white px-6 py-3 rounded">
+        Add to Cart
+        </button>
+
+        <button onclick="buyNow('${id}')"
+        class="bg-green-600 text-white px-6 py-3 rounded">
+        Buy Now
+        </button>
+      </div>
+    </div>
+  `;
+
+  renderReviewForm(id);
+  loadReviews(id);
+  loadRelated(data.category, id);
+}
+
+/* IMAGE */
+window.changeImage = (src)=>{
+  document.getElementById("mainImage").src = src;
+};
+
+/* ADD TO CART */
+window.addToCart = async (id)=>{
+  const user = await getUser();
+
+  if(!user){
+    alert("Login first ❌");
+    return window.location.href="login.html";
+  }
+
+  const cartRef = doc(db,"carts",user.uid);
+  const cartSnap = await getDoc(cartRef);
+
+  let items = cartSnap.exists() ? cartSnap.data().items : [];
+
+  const pSnap = await getDoc(doc(db,"products",id));
+  const p = pSnap.data();
+
+  let existing = items.find(i=>i.id===id);
+
+  if(existing){
+    existing.quantity++;
+  } else {
+    items.push({
+      id,
+      name:p.name,
+      price:p.price,
+      image:p.images?.[0] || "",
+      quantity:1
+    });
+  }
+
+  await setDoc(cartRef,{items});
+  alert("Added to cart ✅");
+};
+
+/* BUY NOW */
+window.buyNow = async (id)=>{
+  await addToCart(id);
+  window.location.href="cart.html";
+};
+
+/* REVIEW FORM */
+function renderReviewForm(productId){
+  document.getElementById("reviews").insertAdjacentHTML("beforebegin", `
+    <div class="mb-6 bg-gray-100 p-4 rounded">
+      <input id="userName" placeholder="Your Name" class="w-full p-2 mb-2 border">
+      <select id="ratingInput" class="w-full p-2 mb-2 border">
+        <option value="5">⭐⭐⭐⭐⭐</option>
+        <option value="4">⭐⭐⭐⭐</option>
+        <option value="3">⭐⭐⭐</option>
+        <option value="2">⭐⭐</option>
+        <option value="1">⭐</option>
+      </select>
+      <textarea id="commentInput" class="w-full p-2 mb-2 border"></textarea>
+      <button onclick="submitReview('${productId}')"
+      class="bg-blue-600 text-white px-4 py-2">
+        Submit
+      </button>
+    </div>
+  `);
+}
+
+/* SUBMIT REVIEW */
+window.submitReview = async (productId)=>{
+  const name = document.getElementById("userName").value.trim();
+  const rating = Number(document.getElementById("ratingInput").value);
+  const comment = document.getElementById("commentInput").value.trim();
+
+  if(!name){
+    alert("Enter name");
+    return;
+  }
+
+  try{
+    await addDoc(collection(db,"reviews"),{
+      product_id:productId,
+      user_name:name,
+      rating,
+      comment,
+      createdAt: serverTimestamp(),
+      approved: false   // ✅ ADMIN APPROVAL SYSTEM
+    });
+
+    alert("Review submitted (Waiting for approval) ⏳");
+
+    document.getElementById("userName").value="";
+    document.getElementById("commentInput").value="";
+
+  }catch(err){
+    console.error(err);
+    alert("Error ❌");
+  }
+};
+
+/* LOAD ONLY APPROVED REVIEWS */
+async function loadReviews(productId){
+  try{
+    const q = query(
+      collection(db,"reviews"),
+      where("product_id","==",productId),
+      where("approved","==",true),
+      orderBy("createdAt","desc")
+    );
+
+    const snap = await getDocs(q);
+
+    const box = document.getElementById("reviews");
+    const ratingBox = document.getElementById("ratingBox");
+
+    if(snap.empty){
+      box.innerHTML="No approved reviews yet";
+      ratingBox.innerHTML="No rating";
+      return;
+    }
+
+    let total=0,count=0,html="";
+
+    snap.forEach(d=>{
+      const r = d.data();
+      total += r.rating || 0;
+      count++;
+
+      html += `
+        <div class="bg-gray-100 p-3 rounded">
+          <b>${r.user_name}</b>
+          <div>${"⭐".repeat(r.rating)}</div>
+          <p>${r.comment || ""}</p>
+        </div>
+      `;
+    });
+
+    ratingBox.innerHTML=`⭐ ${(total/count).toFixed(1)} (${count})`;
+    box.innerHTML=html;
+
+  }catch(err){
+    console.error(err);
+    document.getElementById("reviews").innerHTML="Error loading reviews ❌";
+  }
+}
+
+/* RELATED */
+async function loadRelated(category, currentId){
+  const q = query(
+    collection(db,"products"),
+    where("category","==",category),
+    limit(4)
+  );
+
+  const snap = await getDocs(q);
+  const container=document.getElementById("related-products");
+
+  let html="";
+
+  snap.forEach(docSnap=>{
+    const p = docSnap.data();
+    const id = docSnap.id;
+
+    if(id === currentId) return;
+
+    html+=`
+      <a href="/apna store app/productviews.html?id=${id}" class="border p-2 rounded shadow">
+        <img src="${p.images?.[0] || ""}" class="h-32 w-full object-contain">
+        <p>${p.name}</p>
+        <p class="text-green-600">₹${p.price}</p>
+      </a>
+    `;
+  });
+
+  container.innerHTML=html;
+}
+</script>
+
+</body>
+</html>
