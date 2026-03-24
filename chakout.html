@@ -232,7 +232,7 @@ async function placeOrder(paymentMethod, paymentStatus="Pending"){
         if(stock < item.quantity) throw new Error(item.name+" out of stock ❌");
         await updateDoc(ref,{ quantity: stock - item.quantity });
       }
-      window.location.href="/apna store app/order success.html";
+      window.location.href="order success.html";
     }
 
     // ONLINE PAYMENT: reduce stock only after success
