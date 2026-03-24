@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Login - MyShop</title>
+
+<style>
+body{
+margin:0;
+font-family:system-ui;
+background:#2874f0;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+.box{
+background:white;
+padding:25px;
+border-radius:12px;
+width:300px;
+text-align:center;
+}
+input{
+width:100%;
+padding:10px;
+margin:8px 0;
+border-radius:6px;
+border:1px solid #ddd;
+}
+button{
+width:100%;
+padding:10px;
+background:#fb641b;
+color:white;
+border:none;
+border-radius:6px;
+cursor:pointer;
+}
+a{
+display:block;
+margin-top:10px;
+cursor:pointer;
+color:#2874f0;
+}
+#msg{
+margin-top:10px;
+font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+<h2>Login</h2>
+
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="password" placeholder="Password">
+
+<button onclick="login()">Login</button>
+
+<!-- 🔥 NEW -->
+<a onclick="forgotPassword()">Forgot Password?</a>
+
+<a href="register.html">Register</a>
+
+<p id="msg"></p>
+</div>
+
+<!-- 🔥 Firebase Script -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+/* CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+const msg = document.getElementById("msg");
+
+/* LOGIN */
+window.login = async () => {
+
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+  if(!email || !password){
+    msg.innerText = "Enter email & password ❗";
+    msg.style.color = "red";
+    return;
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+
+    msg.style.color = "green";
+    msg.innerText = "Login Successful ✅";
+
+    setTimeout(()=>{
+      window.location.href = "index.html";
+    },1000);
+
+  } catch (error) {
+    msg.style.color = "red";
+    msg.innerText = error.message;
+  }
+};
+
+/* 🔥 RESET PASSWORD */
+window.forgotPassword = async () => {
+
+  const email = document.getElementById("email").value.trim();
+
+  if(!email){
+    msg.style.color = "red";
+    msg.innerText = "Enter your email first ❗";
+    return;
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+
+    msg.style.color = "green";
+    msg.innerText = "Reset link sent! Check email 📩�In your email click on the three-line menu icon You will see an option labeled Spam or Chat click on that You will find a chat thread titled noreply click on that";
+
+  } catch (error) {
+
+    msg.style.color = "red";
+
+    if(error.code === "auth/user-not-found"){
+      msg.innerText = "No account found ❌";
+    }
+    else if(error.code === "auth/invalid-email"){
+      msg.innerText = "Invalid email ❌";
+    }
+    else{
+      msg.innerText = error.message;
+    }
+  }
+};
+</script>
+
+</body>
+</html>
