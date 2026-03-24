@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Us</title>
+
+<style>
+body{
+  font-family:system-ui;
+  background:#f1f3f6;
+  margin:0;
+}
+
+/* HEADER */
+.header{
+  background:#2874f0;
+  color:white;
+  padding:12px;
+  text-align:center;
+  font-size:18px;
+  font-weight:bold;
+}
+
+/* FORM BOX */
+.container{
+  max-width:400px;
+  margin:30px auto;
+  background:white;
+  padding:20px;
+  border-radius:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+input, textarea{
+  width:100%;
+  padding:10px;
+  margin-bottom:12px;
+  border:1px solid #ddd;
+  border-radius:6px;
+  font-size:14px;
+}
+
+button{
+  width:100%;
+  padding:10px;
+  background:#fb641b;
+  color:white;
+  border:none;
+  border-radius:6px;
+  font-size:15px;
+  cursor:pointer;
+}
+
+button:hover{
+  background:#e55a1f;
+}
+
+.msg{
+  text-align:center;
+  margin-top:10px;
+  font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">Contact Support</div>
+
+<div class="container">
+  <input type="text" id="name" placeholder="Your Name">
+  <input type="number" id="phone" placeholder="Mobile Number">
+  <textarea id="problem" rows="4" placeholder="Write your problem..."></textarea>
+
+  <button onclick="submitForm()">Submit</button>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+let currentUser = null;
+
+/* LOGIN CHECK */
+onAuthStateChanged(auth,(user)=>{
+  if(!user){
+    alert("Login first ❌");
+    location.href="login.html";
+  }else{
+    currentUser = user;
+  }
+});
+
+/* SUBMIT */
+window.submitForm = async ()=>{
+  const name = document.getElementById("name").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const problem = document.getElementById("problem").value.trim();
+  const msg = document.getElementById("msg");
+
+  if(!name || !phone || !problem){
+    msg.innerHTML="⚠️ Fill all fields";
+    msg.style.color="red";
+    return;
+  }
+
+  try{
+    await addDoc(collection(db,"contacts"),{
+      userId: currentUser.uid,
+      name,
+      phone,
+      problem,
+      status:"pending",
+      createdAt: serverTimestamp()
+    });
+
+    msg.innerHTML="✅ Submitted successfully";
+    msg.style.color="green";
+
+    document.getElementById("name").value="";
+    document.getElementById("phone").value="";
+    document.getElementById("problem").value="";
+
+  }catch(err){
+    console.error(err);
+    msg.innerHTML="❌ Error submitting";
+    msg.style.color="red";
+  }
+};
+</script>
+
+</body>
+</html>
