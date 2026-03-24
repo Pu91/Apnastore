@@ -255,7 +255,7 @@ async function placeOrder(paymentMethod, paymentStatus="Pending"){
 
           await updateDoc(doc(db,"orders",orderId), { payment_status:"Paid" });
           alert("Payment Successful! Payment ID: "+response.razorpay_payment_id);
-          window.location.href="/apna store app/order success.html";
+          window.location.href="order success.html";
         },
         prefill: { name, email, contact:phone },
         theme: {color:"#fb641b"}
