@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile</title>
+
+<style>
+body{
+  font-family:system-ui;
+  background:#f1f3f6;
+  margin:0;
+}
+
+.container{
+  max-width:400px;
+  margin:40px auto;
+  background:white;
+  padding:25px;
+  border-radius:12px;
+  box-shadow:0 5px 15px rgba(0,0,0,0.1);
+}
+
+h2{
+  text-align:center;
+  margin-bottom:20px;
+}
+
+.info{
+  margin:10px 0;
+  padding:10px;
+  background:#f5f5f5;
+  border-radius:8px;
+}
+
+input{
+  width:100%;
+  padding:10px;
+  margin-top:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border:none;
+  border-radius:8px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.blue{background:#2874f0;color:white;}
+.red{background:red;color:white;}
+.green{background:green;color:white;}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>My Profile</h2>
+
+  <div class="info">
+    <b>Email:</b>
+    <p id="userEmail">Loading...</p>
+  </div>
+
+  <div class="info">
+    <b>Password:</b>
+    <p>********</p>
+  </div>
+
+  <h3>Change Password</h3>
+  <input type="password" id="oldPass" placeholder="Old Password">
+  <input type="password" id="newPass" placeholder="New Password">
+  <input type="password" id="confirmPass" placeholder="Confirm Password">
+
+  <button class="green" onclick="changePassword()">Update Password</button>
+
+  <button class="blue" onclick="resetPassword()">Forgot Password (Email)</button>
+  <button class="red" onclick="logout()">Logout</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signOut, 
+  sendPasswordResetEmail,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+/* FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCQJLUFqF-tf8hr2lr5e6vMNwzVsvofMos",
+  authDomain: "apna-store-4e151.firebaseapp.com",
+  projectId: "apna-store-4e151",
+  storageBucket: "apna-store-4e151.appspot.com",
+  messagingSenderId: "326132934284",
+  appId: "1:326132934284:web:2c455b1aafcaf3349d3da9"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+/* USER CHECK */
+onAuthStateChanged(auth, (user) => {
+  if(user){
+    document.getElementById("userEmail").innerText = user.email;
+  }else{
+    alert("Login first!");
+    window.location.href = "login.html";
+  }
+});
+
+/* LOGOUT */
+window.logout = function(){
+  signOut(auth)
+  .then(()=>{
+    alert("Logged out");
+    window.location.href = "login.html";
+  })
+  .catch(err=>alert(err.message));
+}
+
+/* RESET PASSWORD EMAIL */
+window.resetPassword = function(){
+  const user = auth.currentUser;
+
+  if(user){
+    sendPasswordResetEmail(auth, user.email)
+    .then(()=>alert("Reset email sent ✔️"))
+    .catch(err=>alert(err.message));
+  }
+}
+
+/* CHANGE PASSWORD */
+window.changePassword = async function(){
+  const oldPass = document.getElementById("oldPass").value;
+  const newPass = document.getElementById("newPass").value;
+  const confirmPass = document.getElementById("confirmPass").value;
+
+  if(newPass !== confirmPass){
+    alert("New password not match!");
+    return;
+  }
+
+  const user = auth.currentUser;
+
+  try{
+    const credential = EmailAuthProvider.credential(user.email, oldPass);
+
+    // Re-authenticate
+    await reauthenticateWithCredential(user, credential);
+
+    // Update password
+    await updatePassword(user, newPass);
+
+    alert("Password updated successfully ✔️");
+
+    document.getElementById("oldPass").value = "";
+    document.getElementById("newPass").value = "";
+    document.getElementById("confirmPass").value = "";
+
+  }catch(err){
+    alert(err.message);
+  }
+}
+</script>
+
+</body>
+</html>
